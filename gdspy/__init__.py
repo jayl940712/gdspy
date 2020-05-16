@@ -72,8 +72,6 @@ _directions_dict = {'+x': 0, '+y': 0.5, '-x': 1, '-y': -0.5}
 _directions_list = ['+x', '+y', '-x', '-y']
 _angle_dic = {'l': _halfpi, 'r': -_halfpi, 'll': numpy.pi, 'rr': -numpy.pi}
 
-_bounding_boxes = {}
-
 
 def _record_reader(stream):
     """
@@ -4834,7 +4832,7 @@ class Cell(object):
     references : list of `CellReference` or `CellArray`
         List of cell references.
     """
-    __slots__ = 'name', 'polygons', 'paths', 'labels', 'references', '_bb_valid'
+    __slots__ = 'name', 'polygons', 'paths', 'labels', 'references', '_bb_valid', '_bounding_box'
 
     def __init__(self, name, exclude_from_current=False):
         self.name = name
@@ -4843,6 +4841,7 @@ class Cell(object):
         self.labels = []
         self.references = []
         self._bb_valid = False
+        self._bounding_box = None
         if not exclude_from_current:
             current_library.add(self)
 
@@ -5161,9 +5160,9 @@ class Cell(object):
                 bb[0, 1] = min(bb[0, 1], all_points[1].min())
                 bb[1, 0] = max(bb[1, 0], all_points[0].max())
                 bb[1, 1] = max(bb[1, 1], all_points[1].max())
-            self._bb_valid = True
-            _bounding_boxes[self] = bb
-        return _bounding_boxes[self]
+            self._bb_valid = False
+            self._bounding_box = bb
+        return self._bounding_box
 
     def get_polygons(self, by_spec=False, depth=None):
         """
@@ -5415,7 +5414,7 @@ class CellReference(object):
         If False a warning is issued when the referenced cell is not
         found.
     """
-    __slots__ = ('ref_cell', 'origin', 'rotation', 'magnification', 'x_reflection')
+    __slots__ = ('ref_cell', 'origin', 'rotation', 'magnification', 'x_reflection', '_bb_valid', '_bounding_box')
 
     def __init__(self, ref_cell, origin=(0, 0), rotation=None, magnification=None,
                  x_reflection=False, ignore_missing=False):
@@ -5424,6 +5423,8 @@ class CellReference(object):
         self.rotation = rotation
         self.magnification = magnification
         self.x_reflection = x_reflection
+        self._bb_valid = False
+        self._bounding_box = None
         if not isinstance(self.ref_cell, Cell) and not ignore_missing:
             warnings.warn("[GDSPY] Cell {0} not found; operations on this CellReference may not work.".format(self.ref_cell), stacklevel=2)
 
@@ -5690,12 +5691,13 @@ class CellReference(object):
         """
         if not isinstance(self.ref_cell, Cell):
             return None
-        if self.rotation is None and self.magnification is None and self.x_reflection is None:
-            key = self
-        else:
-            key = (self.ref_cell, self.rotation, self.magnification, self.x_reflection)
+        #if self.rotation is None and self.magnification is None and self.x_reflection is None:
+        #    key = self
+        #else:
+        #    key = (self.ref_cell, self.rotation, self.magnification, self.x_reflection)
         deps = self.ref_cell.get_dependencies(True)
-        if not (self.ref_cell._bb_valid and all(ref._bb_valid for ref in deps) and key in _bounding_boxes):
+        #if not (self.ref_cell._bb_valid and all(ref._bb_valid for ref in deps) and key in _bounding_boxes):
+        if not self._bb_valid:
             for ref in deps:
                 ref.get_bounding_box()
             self.ref_cell.get_bounding_box()
@@ -5709,9 +5711,11 @@ class CellReference(object):
                 all_points = numpy.concatenate(polygons).transpose()
                 bb = numpy.array(((all_points[0].min(), all_points[1].min()),
                                   (all_points[0].max(), all_points[1].max())))
-            _bounding_boxes[key] = bb
+            self._bb_valid = True
+            self._bounding_box = bb
+            #_bounding_boxes[key] = bb
         else:
-            bb = _bounding_boxes[key]
+            bb = self._bounding_box
         if self.origin is None or bb is None:
             return bb
         else:
@@ -5764,7 +5768,7 @@ class CellArray(object):
         If False a warning is issued when the referenced cell is not
         found.
     """
-    __slots__ = ('ref_cell', 'origin', 'rotation', 'magnification', 'x_reflection', 'columns', 'rows', 'spacing')
+    __slots__ = ('ref_cell', 'origin', 'rotation', 'magnification', 'x_reflection', 'columns', 'rows', 'spacing', '_bb_valid', '_bounding_box')
 
     def __init__(self, ref_cell, columns, rows, spacing, origin=(0, 0), rotation=None,
                  magnification=None, x_reflection=False, ignore_missing=False):
@@ -5776,6 +5780,8 @@ class CellArray(object):
         self.rotation = rotation
         self.magnification = magnification
         self.x_reflection = x_reflection
+        self._bb_valid = False
+        self._bounding_box = None
         if not isinstance(self.ref_cell, Cell) and not ignore_missing:
             warnings.warn("[GDSPY] Cell {0} not found; operations on this CellArray may not work.".format(self.ref_cell), stacklevel=2)
 
@@ -5784,6 +5790,9 @@ class CellArray(object):
             name = self.ref_cell.name
         else:
             name = self.ref_cell
+
+        self._bb_valid = False
+
         return "CellArray (\"{0}\", {1} x {2}, at ({3[0]}, {3[1]}), spacing {4[0]} x {4[1]}, rotation {5}, magnification {6}, reflection {7})".format(name, self.columns, self.rows, self.origin, self.spacing, self.rotation, self.magnification, self.x_reflection)
 
     def __repr__(self):
@@ -6096,7 +6105,8 @@ class CellArray(object):
         key = (self.ref_cell, self.rotation, self.magnification, self.x_reflection, self.columns, self.rows,
                self.spacing[0], self.spacing[1])
         deps = self.ref_cell.get_dependencies(True)
-        if not (self.ref_cell._bb_valid and all(ref._bb_valid for ref in deps) and key in _bounding_boxes):
+        #if not (self.ref_cell._bb_valid and all(ref._bb_valid for ref in deps) and key in _bounding_boxes):
+        if not self._bb_valid:
             for ref in deps:
                 ref.get_bounding_box()
             self.ref_cell.get_bounding_box()
@@ -6110,9 +6120,10 @@ class CellArray(object):
                 all_points = numpy.concatenate(polygons).transpose()
                 bb = numpy.array(((all_points[0].min(), all_points[1].min()),
                                   (all_points[0].max(), all_points[1].max())))
-            _bounding_boxes[key] = bb
+            self._bb_valid = True
+            self._bounding_box = bb
         else:
-            bb = _bounding_boxes[key]
+            bb = self._bounding_box
         if self.origin is None or bb is None:
             return bb
         else:
