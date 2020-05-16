@@ -5981,8 +5981,8 @@ class CellArray(object):
             orgn = numpy.array(self.origin)
         polygonsets = self.ref_cell.get_polygonsets(depth=depth)
         array = []
-        for i in range(self.columns):
-            for j in range(self.rows):
+        for i in range(int(self.columns)):
+            for j in range(int(self.rows)):
                 spc = numpy.array([self.spacing[0] * i, self.spacing[1] * j])
                 for polygonset in polygonsets:
                     ps = libcopy.deepcopy(polygonset)
@@ -6027,8 +6027,8 @@ class CellArray(object):
             rot = None
         paths = self.ref_cell.get_paths(depth=depth)
         array = []
-        for i in range(self.columns):
-            for j in range(self.rows):
+        for i in range(int(self.columns)):
+            for j in range(int(self.rows)):
                 spc = numpy.array([self.spacing[0] * i, self.spacing[1] * j])
                 for path in paths:
                     array.append(libcopy.deepcopy(path).transform(trans, rot, self.magnification,
@@ -6063,8 +6063,8 @@ class CellArray(object):
             xrefl = _pmone_int
         cell_labels = self.ref_cell.get_labels(depth=depth)
         labels = []
-        for ii in range(self.columns):
-            for jj in range(self.rows):
+        for ii in range(int(self.columns)):
+            for jj in range(int(self.rows)):
                 spc = numpy.array([self.spacing[0] * ii, self.spacing[1] * jj])
                 for clbl in cell_labels:
                     lbl = libcopy.deepcopy(clbl)
